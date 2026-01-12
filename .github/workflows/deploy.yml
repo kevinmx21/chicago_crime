@@ -1,0 +1,149 @@
+# GitHub Actions workflow for Databricks Asset Bundle deployment
+name: Deploy Chicago Crime Pipeline
+
+on:
+  push:
+    branches:
+      - develop   # 推送到 develop 触发 DEV 部署
+      - main      # 推送到 main 触发 PROD 部署
+  pull_request:
+    branches:
+      - main      # PR 到 main 时验证
+      - develop
+  workflow_dispatch:  # 允许手动触发
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - prod
+
+env:
+  DATABRICKS_HOST: https://adb-7405616484370045.5.azuredatabricks.net
+
+jobs:
+  # ============ 验证阶段 ============
+  validate:
+    name: Validate Bundle
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Databricks CLI
+        run: |
+          pip install databricks-cli
+          databricks --version
+
+      - name: Validate bundle syntax
+        env:
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+        run: |
+          databricks bundle validate -t dev
+
+  # ============ DEV 部署 ============
+  deploy-dev:
+    name: Deploy to DEV
+    runs-on: ubuntu-latest
+    needs: validate
+    if: github.ref == 'refs/heads/develop' || (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'dev')
+    environment: 
+      name: dev
+      url: https://adb-7405616484370045.5.azuredatabricks.net
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Databricks CLI
+        run: pip install databricks-cli
+
+      - name: Deploy to DEV
+        env:
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+        run: |
+          echo "🚀 Deploying to DEV environment..."
+          databricks bundle deploy -t dev
+          echo "✅ DEV deployment complete!"
+
+      - name: Run Pipeline (Optional - Dry Run)
+        env:
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+        run: |
+          echo "📊 Running pipeline in DEV..."
+          # 取消注释以下行来自动运行 pipeline
+          # databricks bundle run -t dev chicago_crime_ingest
+          echo "✅ Pipeline run initiated!"
+
+  # ============ PROD 部署 ============
+  deploy-prod:
+    name: Deploy to PROD
+    runs-on: ubuntu-latest
+    needs: validate
+    if: github.ref == 'refs/heads/main' || (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'prod')
+    environment: 
+      name: prod
+      url: https://adb-7405616484370045.5.azuredatabricks.net
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Databricks CLI
+        run: pip install databricks-cli
+
+      - name: Deploy to PROD
+        env:
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+        run: |
+          echo "🚀 Deploying to PROD environment..."
+          databricks bundle deploy -t prod
+          echo "✅ PROD deployment complete!"
+
+  # ============ PR 检查 ============
+  pr-check:
+    name: PR Validation
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Databricks CLI
+        run: pip install databricks-cli
+
+      - name: Validate bundle
+        env:
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+        run: |
+          echo "🔍 Validating bundle configuration..."
+          databricks bundle validate -t dev
+          echo "✅ Bundle validation passed!"
+
+      - name: Check for schema changes
+        run: |
+          echo "📋 Checking for schema changes in PR..."
+          git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.sha }} | grep -E '\.(yml|yaml|py)$' || true

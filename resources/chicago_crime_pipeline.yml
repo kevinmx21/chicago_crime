@@ -1,0 +1,54 @@
+# Chicago Crime Data Pipeline 资源定义
+resources:
+  jobs:
+    chicago_crime_ingest:
+      name: "Chicago Crime Ingest Pipeline"
+      description: "AutoLoader pipeline to ingest Chicago crime data from Azure Storage"
+      
+      # 调度设置（可选）
+      schedule:
+        quartz_cron_expression: "0 0 */6 * * ?"  # 每6小时运行一次
+        timezone_id: "America/Chicago"
+        pause_status: PAUSED  # 初始暂停，手动启用
+      
+      # 邮件通知（可选）
+      email_notifications:
+        on_failure:
+          - your-email@example.com
+      
+      # 任务定义
+      tasks:
+        - task_key: ingest_crime_data
+          description: "Ingest crime data using AutoLoader"
+          
+          notebook_task:
+            notebook_path: ../src/notebooks/ingest_crime_data
+            base_parameters:
+              catalog: ${var.catalog}
+              schema: ${var.schema}
+              container: ${var.container}
+              storage_account: ${var.storage_account}
+              env_name: ${var.env_name}
+          
+          # 使用 Serverless 或指定 Cluster
+          # 选项1: Serverless (推荐)
+          environment_key: default
+          
+          # 选项2: 新建 Job Cluster
+          # new_cluster:
+          #   spark_version: "14.3.x-scala2.12"
+          #   node_type_id: "Standard_DS3_v2"
+          #   num_workers: 1
+          #   spark_conf:
+          #     spark.databricks.cluster.profile: serverless
+          
+          # 选项3: 使用现有 Cluster
+          # existing_cluster_id: "xxxx-xxxxxx-xxxxxxx"
+
+  # 定义运行环境
+  environments:
+    default:
+      spec:
+        client: "1"
+        dependencies:
+          - delta-spark
