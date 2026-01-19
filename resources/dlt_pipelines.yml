@@ -1,0 +1,79 @@
+# Delta Live Tables Pipeline 定义
+resources:
+  pipelines:
+    # ============ 主 Crime Data Pipeline ============
+    chicago_crime_pipeline:
+      name: "[${var.env}] Chicago Crime DLT Pipeline"
+      
+      catalog: ${var.catalog}
+      target: ${var.schema}
+      
+      libraries:
+        - notebook:
+            path: ../src/notebooks/dlt_crime_pipeline.py    # ← 改这里
+      
+      configuration:
+        env: ${var.env}
+        storage_account: ${var.storage_account}
+      
+      continuous: false
+      development: true
+      channel: PREVIEW
+      photon: true
+      
+      clusters:
+        - label: default
+          autoscale:
+            min_workers: 1
+            max_workers: 4
+            mode: ENHANCED
+
+    # ============ Reference Data Pipeline ============
+    reference_data_pipeline:
+      name: "[${var.env}] Chicago Crime Reference Data DLT"
+      
+      catalog: ${var.catalog}
+      target: ${var.schema}
+      
+      libraries:
+        - notebook:
+            path: ../src/notebooks/dlt_reference_data.py    # ← 改这里
+      
+      configuration:
+        env: ${var.env}
+        storage_account: ${var.storage_account}
+      
+      continuous: false
+      development: true
+      channel: PREVIEW
+      photon: true
+      
+      clusters:
+        - label: default
+          autoscale:
+            min_workers: 1
+            max_workers: 2
+            mode: ENHANCED
+
+  # ============ 调度 Jobs ============
+  jobs:
+    scheduled_crime_pipeline:
+      name: "[${var.env}] Scheduled Crime DLT Run"
+      
+      schedule:
+        quartz_cron_expression: "0 0 2 * * ?"
+        timezone_id: "America/Chicago"
+        pause_status: PAUSED
+      
+      tasks:
+        - task_key: refresh_reference_data
+          pipeline_task:
+            pipeline_id: ${resources.pipelines.reference_data_pipeline.id}
+            full_refresh: false
+        
+        - task_key: run_crime_pipeline
+          depends_on:
+            - task_key: refresh_reference_data
+          pipeline_task:
+            pipeline_id: ${resources.pipelines.chicago_crime_pipeline.id}
+            full_refresh: false

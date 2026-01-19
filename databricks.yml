@@ -1,29 +1,49 @@
 bundle:
-  name: chicago-crime-pipeline
+  name: chicago-crime-dlt
 
+# 声明所有变量
 variables:
   storage_account:
+    description: Azure Storage Account name
     default: kevintestdatabricks
+  env:
+    description: Environment name (dev/prod)
+    default: dev
+  catalog:
+    description: Unity Catalog name
+    default: dev_catalog
+  schema:
+    description: Schema name
+    default: crime_data_dev
+  container:
+    description: Storage container name
+    default: dev
 
+# 引入资源定义
+include:
+  - resources/*.yml
+
+# 环境配置
 targets:
   # DEV 环境
   dev:
     mode: development
+    default: true
     workspace:
       host: https://adb-7405616484370045.5.azuredatabricks.net
     variables:
+      env: dev
       catalog: dev_catalog
-      schema: chicago_crime_dev
-      container: dev-data
-    
-  # PROD 环境  
+      schema: crime_data_dev
+      container: dev
+
+  # PROD 环境
   prod:
     mode: production
     workspace:
       host: https://adb-7405616484370045.5.azuredatabricks.net
     variables:
+      env: prod
       catalog: prod_catalog
-      schema: chicago_crime_prod
-      container: prod-data
-    run_as:
-      service_principal_name: sp-prod-chicago-crime
+      schema: crime_data_prod
+      container: prod
