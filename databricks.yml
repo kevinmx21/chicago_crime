@@ -1,52 +1,29 @@
 bundle:
   name: chicago-crime-pipeline
 
-# 全局变量
 variables:
   storage_account:
-    description: Azure Storage Account name
     default: kevintestdatabricks
 
-# 引入资源定义
-include:
-  - resources/*.yml
-
-# 环境配置
 targets:
-  # ============ DEV 环境 ============
+  # DEV 环境
   dev:
     mode: development
-    default: true  # 默认环境
     workspace:
       host: https://adb-7405616484370045.5.azuredatabricks.net
     variables:
       catalog: dev_catalog
-      schema: chicago_crime
-      container: dev
-      env_name: dev
+      schema: chicago_crime_dev
+      container: dev-data
     
-    # DEV环境的资源前缀（避免命名冲突）
-    resources:
-      jobs:
-        chicago_crime_ingest:
-          name: "[DEV] Chicago Crime Ingest"
-
-  # ============ PROD 环境 ============
+  # PROD 环境  
   prod:
     mode: production
     workspace:
       host: https://adb-7405616484370045.5.azuredatabricks.net
     variables:
       catalog: prod_catalog
-      schema: chicago_crime
-      container: prod
-      env_name: prod
-    
-    resources:
-      jobs:
-        chicago_crime_ingest:
-          name: "[PROD] Chicago Crime Ingest"
-    
-    # PROD环境建议使用Service Principal运行
-    # run_as:
-    #   service_principal_name: sp-prod-chicago-crime
+      schema: chicago_crime_prod
+      container: prod-data
+    run_as:
+      service_principal_name: sp-prod-chicago-crime
