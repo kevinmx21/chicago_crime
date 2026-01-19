@@ -13,7 +13,7 @@ import dlt
 from pyspark.sql.functions import (
     col, current_timestamp, lit, count, sum as spark_sum,
     when, year, month, dayofweek, hour, to_timestamp,
-    avg, round as spark_round
+    avg, round as spark_round, countDistinct  # ← 添加这个
 )
 from pyspark.sql.types import FloatType, IntegerType, BooleanType, TimestampType
 
@@ -47,7 +47,8 @@ print(f"Source Path: {source_path}")
     comment="Raw Chicago crime data ingested via AutoLoader",
     table_properties={
         "quality": "bronze",
-        "pipelines.autoOptimize.managed": "true"
+        "pipelines.autoOptimize.managed": "true",
+        "pipelines.reset.allowed": "false"  # ← 禁止重置
     }
 )
 def bronze_crime():
@@ -75,12 +76,62 @@ def bronze_crime():
 
 # COMMAND ----------
 
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Silver Layer - Enriched Data (with Reference)
+
+# COMMAND ----------
+
+@dlt.table(
+    name="silver_crime_enriched",
+    comment="Crime data enriched with reference data",
+    table_properties={
+        "quality": "silver",
+        "pipelines.autoOptimize.managed": "true",
+        "pipelines.reset.allowed": "false"  # ← 禁止重置
+    }
+)
+def silver_crime_enriched():
+    """
+    Join silver crime data with reference tables.
+    Note: Reference tables are read from catalog (managed by separate pipeline)
+    """
+    silver_crime = dlt.read("silver_crime")
+    
+    # 从 catalog 读取 reference 表（另一个 pipeline 管理）
+    ref_iucr = spark.table(f"{spark.conf.get('env', 'dev')}_catalog.crime_data_{spark.conf.get('env', 'dev')}.ref_iucr_codes")
+    ref_community = spark.table(f"{spark.conf.get('env', 'dev')}_catalog.crime_data_{spark.conf.get('env', 'dev')}.ref_community_areas")
+    
+    # 准备 lookup 表
+    community_lookup = ref_community.select(
+        col("AREA_NUMBE").cast("string").alias("area_num"),
+        col("COMMUNITY").alias("community_name")
+    )
+    
+    iucr_lookup = ref_iucr.select(
+        col("iucr"),
+        col("primary_description").alias("iucr_primary_desc"),
+        col("secondary_description").alias("iucr_secondary_desc")
+    )
+    
+    return (silver_crime
+        .join(iucr_lookup, on="iucr", how="left")
+        .join(
+            community_lookup,
+            silver_crime["community_area"].cast("string") == community_lookup["area_num"],
+            how="left"
+        )
+        .drop("area_num")
+    )
+
 @dlt.table(
     name="silver_crime",
     comment="Cleaned, deduplicated, and typed crime data",
     table_properties={
         "quality": "silver",
-        "pipelines.autoOptimize.managed": "true"
+        "pipelines.autoOptimize.managed": "true",
+        "pipelines.reset.allowed": "false"  # ← 禁止重置
     }
 )
 @dlt.expect_or_drop("valid_id", "id IS NOT NULL")
@@ -138,7 +189,8 @@ def silver_crime():
     comment="Crime statistics aggregated by crime type and year",
     table_properties={
         "quality": "gold",
-        "pipelines.autoOptimize.managed": "true"
+        "pipelines.autoOptimize.managed": "true",
+        "pipelines.reset.allowed": "false"  # ← 禁止重置
     }
 )
 def gold_crime_by_type():
@@ -165,7 +217,8 @@ def gold_crime_by_type():
     comment="Crime statistics aggregated by community area",
     table_properties={
         "quality": "gold",
-        "pipelines.autoOptimize.managed": "true"
+        "pipelines.autoOptimize.managed": "true",
+        "pipelines.reset.allowed": "false"  # ← 禁止重置
     }
 )
 def gold_crime_by_location():
@@ -191,7 +244,8 @@ def gold_crime_by_location():
     comment="Crime statistics aggregated by time dimensions",
     table_properties={
         "quality": "gold",
-        "pipelines.autoOptimize.managed": "true"
+        "pipelines.autoOptimize.managed": "true",
+        "pipelines.reset.allowed": "false"  # ← 禁止重置
     }
 )
 def gold_crime_by_time():
@@ -214,7 +268,8 @@ def gold_crime_by_time():
     comment="Overall crime summary dashboard table",
     table_properties={
         "quality": "gold",
-        "pipelines.autoOptimize.managed": "true"
+        "pipelines.autoOptimize.managed": "true",
+        "pipelines.reset.allowed": "false"  # ← 禁止重置
     }
 )
 def gold_crime_summary():
