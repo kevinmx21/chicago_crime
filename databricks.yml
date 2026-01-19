@@ -1,0 +1,29 @@
+bundle:
+  name: chicago-crime-pipeline
+
+variables:
+  storage_account:
+    default: kevintestdatabricks
+
+targets:
+  # DEV 环境
+  dev:
+    mode: development
+    workspace:
+      host: https://adb-7405616484370045.5.azuredatabricks.net
+    variables:
+      catalog: dev_catalog
+      schema: chicago_crime_dev
+      container: dev-data
+    
+  # PROD 环境  
+  prod:
+    mode: production
+    workspace:
+      host: https://adb-7405616484370045.5.azuredatabricks.net
+    variables:
+      catalog: prod_catalog
+      schema: chicago_crime_prod
+      container: prod-data
+    run_as:
+      service_principal_name: sp-prod-chicago-crime
